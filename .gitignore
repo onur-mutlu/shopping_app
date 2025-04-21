@@ -1,3 +1,17 @@
+# Python cache
 __pycache__/
 *.pyc
+
+# Environment variables (in case you use .env later)
 .env
+
+# Virtual environment
+venv/
+
+# IDE/editor folders
+.vscode/
+.idea/
+
+# Mac/Windows system files
+.DS_Store
+Thumbs.db
