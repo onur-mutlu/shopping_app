@@ -21,6 +21,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             </li>
         {% endfor %}
         </ul>
+        <input type="number" id="amountInput" placeholder="Toplam Tutar (₺)" required />
         <button type="button" onclick="deactivateSelected()">Save Changes</button>
     {% else %}
         <p>Aktif ürün yok.</p>
@@ -72,18 +73,24 @@ function addItem() {
     });
 }
 function deactivateSelected() {
-    const checkboxes = document.querySelectorAll('input[name="item"]:checked');
+     const checkboxes = document.querySelectorAll('input[name="item"]:checked');
     const ids = Array.from(checkboxes).map(cb => parseInt(cb.value));
+    const amount = parseInt(document.getElementById("amountInput").value);
 
     if (ids.length === 0) {
         alert("Lütfen en az bir ürün seçin.");
         return;
     }
 
+    if (!amount || isNaN(amount)) {
+        alert("Lütfen geçerli bir toplam tutar girin.");
+        return;
+    }
+
     fetch('/items/deactivate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: ids })
+        body: JSON.stringify({ ids: ids, amount: amount })
     })
     .then(response => {
         if (response.ok) {
@@ -135,12 +142,20 @@ def clear_items():
 
 @app.route('/items/deactivate', methods=['POST'])
 def deactivate_items():
+
+    
+
     data = request.get_json()
     ids = data.get('ids', [])
     if not ids or not all(isinstance(i, int) for i in ids):
         return jsonify({'error': 'Invalid item list'}), 400
 
-    cursor.execute("INSERT INTO carts () VALUES ()")
+    amount = data.get('amount')
+
+    if amount is None or not isinstance(amount, int):
+        return jsonify({'error': 'Amount is required and must be an integer'}), 400
+        
+    cursor.execute("INSERT INTO carts (total_amount) VALUES (%s)", (amount,))
     db.commit()
     cart_id = cursor.lastrowid
 
