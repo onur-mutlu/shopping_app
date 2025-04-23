@@ -13,6 +13,7 @@ def get_latest_carts(limit=3):
     cursor.execute("""
          SELECT c.id AS cart_id,
            c.created_at AS cart_created,
+           c.total_amount AS total_amount,
            i.name,
            i.id AS item_id,
            i.created_at AS item_created_at
@@ -26,8 +27,10 @@ def get_latest_carts(limit=3):
     carts = defaultdict(lambda: {'created_at': None, 'items_list': []})
     for row in rows:
         cart_id = row['cart_id']
+        total_amount = row['total_amount']
         if carts[cart_id]['created_at'] is None:
             carts[cart_id]['created_at'] = datetime.strptime(str(row['cart_created']), "%Y-%m-%d %H:%M:%S")
+            carts[cart_id]['total_amount'] = row['total_amount']
         carts[cart_id]['items_list'].append({
             'name': row['name'],
             'created_at': datetime.strptime(str(row['item_created_at']), "%Y-%m-%d %H:%M:%S")

@@ -32,7 +32,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         {% for cart_id, cart in carts.items() %}
             <div>
                 <button onclick="toggleCart('cart{{ cart_id }}')">
-                    Sepet #{{ cart_id }} – {{ cart.created_at.strftime('%H:%M %d.%m.%Y %H:%M') }}
+                    Sepet #{{ cart_id }} – {{ cart.created_at.strftime('%H:%M %d.%m.%Y %H:%M') }} - {{ cart.total_amount }}₺
                 </button>
                 <ul id="cart{{ cart_id }}" style="display: none; margin-top: 5px;">
                     {% for item in cart.items_list %}
