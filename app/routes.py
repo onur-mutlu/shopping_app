@@ -1,7 +1,11 @@
-from flask import request, jsonify, render_template_string
+from flask import request, jsonify, render_template_string, session, redirect
 from app import app
 from app.db import cursor, db
 from app.logic import get_active_items, get_latest_carts
+from flask_bcrypt import Bcrypt
+from functools import wraps
+
+bcrypt = Bcrypt(app)
 
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html>
@@ -48,6 +52,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <h2>➕ Yeni Ürün Ekle</h2>
 <input type="text" id="itemInput" placeholder="Yeni ürün adı" />
 <button onclick="addItem()">Ekle</button>
+<h2>🚪 Logout</h2>
+<a href="/logout">Logout</a>
 
 <script>
 function addItem() {
@@ -107,44 +113,65 @@ function toggleCart(id) {
 </script>
 </html>"""
 
-@app.route('/')
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect('/login')
+        return f(*args, **kwargs)
+    return decorated_function
+
+@app.route('/dashboard')
+@login_required
 def show_list():
-    active_items = get_active_items()
-    carts = get_latest_carts()
+    user_id = session['user_id']
+
+    cursor.execute("SELECT * FROM items WHERE is_active = 1 AND user_id = %s ORDER BY created_at DESC", (user_id,))
+    active_items = cursor.fetchall()
+
+    carts = get_latest_carts(user_id)
+
     return render_template_string(HTML_TEMPLATE, active_items=active_items, carts=carts)
 
+
 @app.route('/items', methods=['GET'])
+@login_required
 def get_items():
     cursor.execute("SELECT * FROM items")
     return jsonify(cursor.fetchall())
 
 @app.route('/items', methods=['POST'])
+@login_required
 def add_item():
     data = request.get_json()
     name = data.get('name')
+    user_id = session['user_id']
+
     if not name:
         return jsonify({'error': 'Name is required'}), 400
-    cursor.execute("INSERT INTO items (name) VALUES (%s)", (name,))
+
+    cursor.execute("INSERT INTO items (name, user_id, is_active) VALUES (%s, %s, 1)", (name, user_id))
     db.commit()
     return jsonify({'message': 'Item added'}), 201
 
 @app.route('/items/<int:item_id>', methods=['DELETE'])
+@login_required
 def delete_item(item_id):
     cursor.execute("DELETE FROM items WHERE id = %s", (item_id,))
     db.commit()
     return jsonify({'message': 'Item deleted'})
 
 @app.route('/items', methods=['DELETE'])
+@login_required
 def clear_items():
     cursor.execute("DELETE FROM items")
     db.commit()
     return jsonify({'message': 'All items cleared'})
 
 @app.route('/items/deactivate', methods=['POST'])
+@login_required
 def deactivate_items():
-
-    
-
+    user_id = session['user_id']
     data = request.get_json()
     ids = data.get('ids', [])
     if not ids or not all(isinstance(i, int) for i in ids):
@@ -155,7 +182,7 @@ def deactivate_items():
     if amount is None or not isinstance(amount, int):
         return jsonify({'error': 'Amount is required and must be an integer'}), 400
         
-    cursor.execute("INSERT INTO carts (total_amount) VALUES (%s)", (amount,))
+    cursor.execute("INSERT INTO carts (total_amount,user_id) VALUES (%s,%s)", (amount,user_id,))
     db.commit()
     cart_id = cursor.lastrowid
 
@@ -168,3 +195,71 @@ def deactivate_items():
     db.commit()
 
     return jsonify({'message': 'Items deactivated and added to cart', 'cart_id': cart_id})
+
+
+@app.route('/signup', methods=['GET', 'POST'])
+def signup():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
+
+        cursor.execute("INSERT INTO users (username, password_hash) VALUES (%s, %s)", (username, hashed_password))
+        db.commit()
+
+        return redirect('/login')
+    return render_template_string("""
+        <h2>Sign Up</h2>
+        <form method="POST">
+            Kullanıcı Adı: <input type="text" name="username" required><br>
+            Şifre        : <input type="password" name="password" required><br>
+            <button type="submit">Sign Up</button>
+        </form>
+        <a href="/login">Hesabın varsa buradan giriş yap</a>
+    """)
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+
+        cursor.execute("SELECT id, password_hash FROM users WHERE username = %s", (username,))
+        user = cursor.fetchone()
+
+        if user and bcrypt.check_password_hash(user['password_hash'], password):
+            session['user_id'] = user['id']
+            return redirect('/dashboard')
+        else:
+            return "Invalid credentials!"
+
+    return render_template_string("""
+        <h2>Login</h2>
+        <form method="POST">
+            Kullanıcı Adı: <input type="text" name="username" required><br>
+            Şifre : <input type="password" name="password" required><br>
+            <button type="submit">Giriş Yap</button>
+        </form>
+        <a href="/signup">Hesabın yok mu? Buradan Kaydol</a>
+    """)
+
+
+
+
+
+@app.route('/items')
+@login_required
+def items():
+    user_id = session['user_id']
+    cursor.execute("SELECT * FROM items WHERE user_id = %s", (user_id,))
+    items = cursor.fetchall()
+    return render_template('items.html', items=items)
+
+
+@app.route('/logout')
+@login_required
+def logout():
+    session.clear()
+    return redirect('/login')
+

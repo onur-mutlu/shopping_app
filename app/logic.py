@@ -1,5 +1,6 @@
 from datetime import datetime
 from collections import defaultdict
+from flask import  session
 from .db import cursor, db
 
 def get_active_items():
@@ -10,6 +11,7 @@ def get_active_items():
     return items
 
 def get_latest_carts(limit=3):
+    user_id = session['user_id']
     cursor.execute("""
          SELECT c.id AS cart_id,
            c.created_at AS cart_created,
@@ -20,14 +22,14 @@ def get_latest_carts(limit=3):
         FROM carts c
         JOIN cart_items ci ON ci.cart_id = c.id
         JOIN items i ON i.id = ci.item_id
+        WHERE c.user_id = %s
         ORDER BY c.created_at DESC, i.created_at DESC
-    """)
+    """, (user_id,))
     rows = cursor.fetchall()
 
     carts = defaultdict(lambda: {'created_at': None, 'items_list': []})
     for row in rows:
         cart_id = row['cart_id']
-        total_amount = row['total_amount']
         if carts[cart_id]['created_at'] is None:
             carts[cart_id]['created_at'] = datetime.strptime(str(row['cart_created']), "%Y-%m-%d %H:%M:%S")
             carts[cart_id]['total_amount'] = row['total_amount']
@@ -37,3 +39,4 @@ def get_latest_carts(limit=3):
         })
 
     return dict(list(carts.items())[:limit])
+    print(user_id)
