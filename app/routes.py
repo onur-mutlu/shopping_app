@@ -213,7 +213,7 @@ def signup():
         <form method="POST">
             Kullanıcı Adı: <input type="text" name="username" required><br>
             Şifre        : <input type="password" name="password" required><br>
-            <button type="submit">Sign Up</button>
+            <button type="submit">Kayıt ol</button>
         </form>
         <a href="/login">Hesabın varsa buradan giriş yap</a>
     """)
